@@ -1,4 +1,4 @@
-Name:                ToyFramework
+Name:                toyframework
 Version:             0.0.1
 Cabal-Version:       >= 1.2
 Synopsis:            
@@ -14,7 +14,7 @@ Build-Type:          Simple
 Library
   Extensions:        TypeFamilies, MultiParamTypeClasses, FlexibleInstances, 
                      UndecidableInstances, RankNTypes, TupleSections, ScopedTypeVariables
-  Build-Depends:     base, cairo, curve, fclabels, gtk, vector-space
+  Build-Depends:     base, cairo, curve, fclabels, gtk, vector-space, containers
   Exposed-Modules:
     Graphics.ToyFramework
     Graphics.ToyFramework.Core

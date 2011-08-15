@@ -11,24 +11,26 @@
 -- Toy Framework - Simplifies the creation of simple Cairo / GTK applications.
 
 {-# LANGUAGE TemplateHaskell, TypeOperators, TypeFamilies,
-  ExistentialQuantification, FlexibleInstances #-}
+  ExistentialQuantification, FlexibleInstances, StandaloneDeriving,
+  GeneralizedNewtypeDeriving #-}
 
 module Graphics.ToyFramework
-  ( DPoint, DColor, DRect, DLine
+  ( DPoint, DColor, DLine
   , Positionable(..)
   , Handle(..)
   , Slider(..), mkToggle, mkSlider, sliderValue, sliderPos, sliderHandle
   , Focusable(..), changeFocus, focus, focusToList, clickElement, displayFocusable, moveFocusable
   , apipe
-  , move, relMove, line, box, pathBounds, drawArrow
+  , move, relMove, line, pathBounds, drawArrow
   , Draw(..), Drawable(..), Color(..)
   , module Graphics.ToyFramework.Core
   ) where
 
 import Graphics.ToyFramework.Core
 
-import Control.Monad (when)
+import Control.Applicative (Applicative, liftA2)
 import Control.Arrow (second, (***))
+import Control.Monad (when)
 
 import Data.AffineSpace
 import Data.Curve
@@ -37,15 +39,14 @@ import Data.Curve.Util
 import Data.IORef
 import Data.List ((\\))
 import Data.Maybe
-import Data.Record.Label
+import Data.Label
 
 import qualified Graphics.Rendering.Cairo as C
+import qualified Graphics.Rendering.Cairo.Internal as CI
 
 type DPoint = (Double, Double)
 type DColor = (Double, Double, Double)
-type DRect = (I.Interval Double, I.Interval Double)
 type DLine = (Linear Double, Linear Double)
-
 
 --TODO: convenience function like 'trace' except taking a C.render or
 -- drawable
@@ -61,7 +62,7 @@ data Handle = Handle
   } deriving (Eq)
 
 data Slider a = Slider 
-  { _sliderMetric :: (Double :<->: a)
+  { _sliderMetric :: Bijection (->) Double a
   , sliderValue_ :: a
   , _sliderLine :: DLine 
   , _sliderColor :: DColor
@@ -105,16 +106,15 @@ instance (Show a) => Predicate (Slider a) where
     element p = element p . sliderHandle
 
 -- | Creates an isomorphism between (0, 1) and some other interval
-ivlIso ivl = (I.mapping I.unit ivl) :<->: (I.mapping ivl I.unit)
+ivlIso ivl = Bij (I.mapping I.unit ivl) (I.mapping ivl I.unit)
 
 -- | Not a real isomorphism.
-boolIso = (\x -> if x < 0.5 then False else True) 
-    :<->: (fromIntegral . fromEnum)
+boolIso = Bij (> 0.5) (fromIntegral . fromEnum)
 
 mkToggle (x, y) v = Slider boolIso v (Linear x x, Linear (y - 5) (y + 5))
 mkSlider ivl = Slider (ivlIso ivl)
 
-sliderT sl val = I.clamp I.unit $ bw (_sliderMetric sl) $ val
+sliderT sl val = I.clamp I.unit $ bw (_sliderMetric sl) val
 sliderCurT sl = sliderT sl $ sliderValue_ sl
 
 sliderValue = lens sliderValue_
@@ -122,11 +122,11 @@ sliderValue = lens sliderValue_
 
 sliderPos :: Slider a :-> DPoint
 sliderPos = lens (\sl -> (_sliderLine sl `at`) $ sliderCurT sl)
-  (\x sl -> flip (setL sliderValue) sl $
-    fw (_sliderMetric sl) $ fst $ (toSBasis $ _sliderLine sl) `nearest` x)
+  (\x sl -> flip (set sliderValue) sl .
+    fw (_sliderMetric sl) . fst $ (toSBasis $ _sliderLine sl) `nearest` x)
 
 sliderHandle :: (Show a) => Slider a -> Handle
-sliderHandle s@(Slider _ val _ col) = Handle (show val) (getL sliderPos s) col
+sliderHandle s@(Slider _ val _ col) = Handle (show val) (get sliderPos s) col
 
 
 -----------------------------------------------------------------------------
@@ -138,7 +138,7 @@ type Focusable a = ([a], Maybe a)
 clickElement :: (Eq a, Predicate a, Element a ~ DPoint) => 
   Maybe a -> DPoint -> Focusable a -> Focusable a
 clickElement noMatch cur x@(xs, _) = 
-  maybe (xs, noMatch) (flip (setL focus) x . Just) $ 
+  maybe (xs, noMatch) (flip (set focus) x . Just) $ 
   listToMaybe (filter (element cur) xs)
 
 changeFocus y' (x, y) = (maybeToList y ++ (x \\ maybeToList y'), y')
@@ -150,12 +150,12 @@ focusToList :: Focusable a -> [a]
 focusToList (xs, Just x) = x : xs
 focusToList (xs, Nothing) = xs
 
-displayFocusable :: (Draw a) => (Int, Int) -> Focusable a -> C.Render (Focusable a)
-displayFocusable = const $ apipe (mapM_ draw . focusToList)
+displayFocusable :: (Draw a) => IPnt -> IRect -> Focusable a -> C.Render (Focusable a)
+displayFocusable = const $ const $ apipe (mapM_ draw . focusToList)
 
-moveFocusable :: (Eq a, Positionable a) => (DPoint -> Focusable a -> Maybe a) -> 
+moveFocusable :: (Eq a, Positionable a) => (DPoint -> Focusable a -> Maybe a) ->
   DPoint -> Focusable a -> Focusable a
-moveFocusable f p x = modL focus (maybe (f p x) (Just . setL pos p)) x
+moveFocusable f p x = modify focus (maybe (f p x) (Just . set pos p)) x
 
 
 -----------------------------------------------------------------------------
@@ -166,11 +166,21 @@ move = uncurry C.moveTo
 relMove = uncurry C.relMoveTo
 
 line (x1, y1) (x2, y2) = (Linear x1 x2, Linear y1 y2)
-box (x1, y1) (x2, y2) = (x1 I.... x2, y1 I.... y2)
 
 pathBounds :: C.Render (I.Interval Double, I.Interval Double)
 pathBounds = do (x1, y1, x2, y2) <- C.fillExtents
-                return $ box (x1, y1) (x2, y2)
+                return $ fromCorners (x1, y1) (x2, y2)
+
+textSize :: String -> C.Render DPoint
+textSize txt = do
+  (C.TextExtents _ _ _ _ w h) <- C.textExtents txt
+  return (w, h)
+
+deriving instance Applicative C.Render
+
+textRect :: String -> Int -> Int -> C.Render DRect
+textRect txt f t = liftA2 rect (textSize pre) (textSize (take (t - f) post))
+  where (pre, post) = splitAt f txt
 
 drawArrow :: (Integrable a, Codomain a ~ DPoint) =>
   Double -> Domain a -> Domain a -> a -> C.Render ()
@@ -237,7 +247,7 @@ instance (Drawable (a, a)) => Drawable (Pw (a, a)) where
 -- Example code follows
 -----------------------------------------------------------------------------
 
-mouse1 :: (Maybe (Bool, Int)) -> (Double, Double) ->
+mouse1 :: Maybe (Bool, Int) -> (Double, Double) ->
   Focusable Handle -> IO (Focusable Handle)
 mouse1 (Just (True, 0))  p = return . clickElement (Just $ Handle "hi" p (1.0,0,0)) p
 mouse1 (Just (False, 0)) p = return . changeFocus Nothing
@@ -260,7 +270,7 @@ type DSlider = Slider Double
 dline :: (Double, Double) -> (Double, Double) -> DLine
 dline (x1, y1) (x2, y2) = (Linear x1 x2, Linear y1 y2)
 
-mouse2 :: (Maybe (Bool, Int)) -> (Double, Double) ->
+mouse2 :: Maybe (Bool, Int) -> (Double, Double) ->
   Focusable (Slider Double) -> IO (Focusable (Slider Double))
 mouse2 (Just (True, 0))  p = return . clickElement
   (Just $ mkSlider (0 I.... 100) 0 (dline p (p ^+^ (0,100))) (1.0,0,0)) p

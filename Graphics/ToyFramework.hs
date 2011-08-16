@@ -21,7 +21,7 @@ module Graphics.ToyFramework
   , Slider(..), mkToggle, mkSlider, sliderValue, sliderPos, sliderHandle
   , Focusable(..), changeFocus, focus, focusToList, clickElement, displayFocusable, moveFocusable
   , apipe
-  , move, relMove, line, pathBounds, drawArrow
+  , move, relMove, line, pathBounds, textSize, textRect, relText, drawArrow
   , Draw(..), Drawable(..), Color(..)
   , module Graphics.ToyFramework.Core
   ) where
@@ -181,6 +181,13 @@ deriving instance Applicative C.Render
 textRect :: String -> Int -> Int -> C.Render DRect
 textRect txt f t = liftA2 rect (textSize pre) (textSize (take (t - f) post))
   where (pre, post) = splitAt f txt
+
+relText :: DPoint -> DPoint -> String -> C.Render ()
+relText (x, y) pos txt = do
+    sz <- textSize txt
+    let r = rect (0, 0) sz
+    move $ pos ^-^ ((fst $ rside 0 r) `at` x, (snd $ rside 3 r) `at` y)
+    C.showText txt
 
 drawArrow :: (Integrable a, Codomain a ~ DPoint) =>
   Double -> Domain a -> Domain a -> a -> C.Render ()

@@ -27,18 +27,24 @@ import System.IO.Unsafe
 type KeyInfo = (Bool, G.TimeStamp, [G.Modifier])
 type KeyTable = M.Map String KeyInfo
 
-type IRect = (IPnt, IPnt)
 type IPnt = (Int, Int)
-
-
--- Thought: what if these were yielded from "a -> KeyTable -> {}"
+type IRect = (IPnt, IPnt)
 
 data Toy a = Toy
   { initialState :: a
+
+  -- Given the current keyboard state, perform a single 30ms periodic execution.
   , tick    :: KeyTable                              -> a -> IO a
+
+  -- Display using cairo, based on the canvas size and dirty region.
   , display :: IPnt -> IRect                         -> a -> C.Render a
+
+  -- Handle mouse presses (first parameter is (pressed?, which)) and motion.
   , mouse   :: Maybe (Bool, Int) -> (Double, Double) -> a -> IO a
-  , key     :: Either String Char -> Bool            -> a -> IO a
+
+  -- Handle key-presses, first parameter is "pressed?", second is (Left string)
+  -- to give the names of non-character keys, and (Right char) for the rest.
+  , key     :: Bool -> Either String Char            -> a -> IO a
   }
 
 dummyToy x = Toy
@@ -90,7 +96,7 @@ runToy toy = do
     updateSecond state $ uncurry $ tick toy
     G.widgetQueueDraw canvas
     return True)
-      G.priorityDefaultIdle 15
+      G.priorityDefaultIdle 30
 
   G.mainGUI
 

@@ -172,21 +172,23 @@ pathBounds = do (x1, y1, x2, y2) <- C.fillExtents
                 return $ fromCorners (x1, y1) (x2, y2)
 
 textSize :: String -> C.Render DPoint
+textSize "" = return (0, 0)
 textSize txt = do
-  (C.TextExtents _ _ _ _ w h) <- C.textExtents txt
+  (C.TextExtents _ _ _ h w _) <- C.textExtents txt
   return (w, h)
 
 deriving instance Applicative C.Render
 
 textRect :: String -> Int -> Int -> C.Render DRect
-textRect txt f t = liftA2 rect (textSize pre) (textSize (take (t - f) post))
+textRect txt f t = liftA2 (\(x, _) (w, h) -> fromCorners (x, -h) (x + w, 0))
+                          (textSize pre) (textSize (take (t - f) post))
   where (pre, post) = splitAt f txt
 
 relText :: DPoint -> DPoint -> String -> C.Render ()
 relText (x, y) pos txt = do
     sz <- textSize txt
     let r = rect (0, 0) sz
-    move $ pos ^-^ ((fst $ rside 0 r) `at` x, (snd $ rside 3 r) `at` y)
+    move $ pos ^-^ ((fst $ rside 0 r) `at` x, negate $ (snd $ rside 3 r) `at` y)
     C.showText txt
 
 drawArrow :: (Integrable a, Codomain a ~ DPoint) =>

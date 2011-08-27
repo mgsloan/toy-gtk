@@ -262,7 +262,7 @@ mouse1 (Just (True, 0))  p = return . clickElement (Just $ Handle "hi" p (1.0,0,
 mouse1 (Just (False, 0)) p = return . changeFocus Nothing
 mouse1 Nothing           p = return . moveFocusable (const $ const Nothing) p
 
-key1 (Left "Escape") _ s = quit >> return s
+key1 _ (Left "Escape") s = quit >> return s
 key1 _ _ s = return s
 
 --IDEA: once we have fclabels, make a function called 'override' which,

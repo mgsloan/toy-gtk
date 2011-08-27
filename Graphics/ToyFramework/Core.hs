@@ -103,10 +103,10 @@ runToy toy = do
 quit = G.mainQuit
 
 
-handleKey :: IORef (KeyTable, a) -> (Either String Char -> Bool -> a -> IO a) ->
+handleKey :: IORef (KeyTable, a) -> (Bool -> Either String Char -> a -> IO a) ->
   E.Event -> IO Bool
 handleKey st f ev = do
-  updateState st (f (maybe (Left name) Right char) pres) 
+  updateState st (f pres $ maybe (Left name) Right char)
                 (M.insert name (pres, time, mods))
   return True
  where name = E.eventKeyName ev

@@ -12,7 +12,7 @@
 
 module Graphics.ToyFramework.Core
   ( Toy(..), KeyTable, KeyInfo, IRect, IPnt
-  , dummyToy, runToy, quit
+  , dummyToy, runToy, runToyState, quit
   ) where 
 
 import Control.Arrow
@@ -68,8 +68,11 @@ firstIO f (a, b) = f a >>= (\a' -> return (a', b))
 secondIO :: (b -> IO b') -> (a, b) -> IO (a, b')
 secondIO f (a, b) = f b >>= (\b' -> return (a, b'))
 
-runToy ::Toy a -> IO ()
-runToy toy = do
+runToy :: Toy a -> IO ()
+runToy x = runToyState x >>= snd
+
+runToyState :: Toy a -> IO (IORef (KeyTable, a), IO ())
+runToyState toy = do
   G.initGUI
 
   window <- G.windowNew
@@ -98,7 +101,7 @@ runToy toy = do
     return True)
       G.priorityDefaultIdle 30
 
-  G.mainGUI
+  return (state, G.mainGUI)
 
 quit = G.mainQuit
 

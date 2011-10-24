@@ -79,6 +79,8 @@ runToyState toy = do
   canvas <- G.drawingAreaNew
   state <- newIORef (M.empty, initialState toy)
 
+  G.windowSetDefaultSize window 640 480
+
   G.onKeyPress   window $ handleKey state $ key toy
   G.onKeyRelease window $ handleKey state $ key toy
 

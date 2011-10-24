@@ -23,6 +23,7 @@ module Graphics.ToyFramework
   , apipe
   , move, relMove, line, pathBounds, textSize, textRect, relText, drawArrow
   , Draw(..), Drawable(..), Color(..)
+  , mkOnceIO, watchChannel, watchPredicate, watch, watch', printWatches
   , module Graphics.ToyFramework.Core
   ) where
 
@@ -30,19 +31,24 @@ import Graphics.ToyFramework.Core
 
 import Control.Applicative (Applicative, liftA2)
 import Control.Arrow (second, (***))
-import Control.Monad (when)
+import Control.Concurrent
+import Control.Monad (liftM, when)
 
 import Data.AffineSpace
 import Data.Curve
 import qualified Data.Curve.Interval as I
 import Data.Curve.Util
+import Data.Function (on)
 import Data.IORef
-import Data.List ((\\))
-import Data.Maybe
 import Data.Label
+import Data.List ((\\), sortBy, groupBy)
+import Data.Maybe
+import Data.Ord (comparing)
 
 import qualified Graphics.Rendering.Cairo as C
 import qualified Graphics.Rendering.Cairo.Internal as CI
+
+import System.IO.Unsafe (unsafePerformIO)
 
 type DPoint = (Double, Double)
 type DColor = (Double, Double, Double)
@@ -167,7 +173,7 @@ relMove = uncurry C.relMoveTo
 
 line (x1, y1) (x2, y2) = (Linear x1 x2, Linear y1 y2)
 
-pathBounds :: C.Render (I.Interval Double, I.Interval Double)
+pathBounds :: C.Render DRect
 pathBounds = do (x1, y1, x2, y2) <- C.fillExtents
                 return $ fromCorners (x1, y1) (x2, y2)
 
@@ -191,8 +197,7 @@ relText (x, y) pos txt = do
     move $ pos ^-^ ((fst $ rside 0 r) `at` x, negate $ (snd $ rside 3 r) `at` y)
     C.showText txt
 
-drawArrow :: (Integrable a, Codomain a ~ DPoint) =>
-  Double -> Domain a -> Domain a -> a -> C.Render ()
+drawArrow :: (Integrable a, Codomain a ~ DPoint) => Double -> Domain a -> Domain a -> a -> C.Render ()
 drawArrow w ht tt c = draw (line hp $ tp + norm)
                    >> draw (line hp $ tp - norm)
           where hp = c `at` ht
@@ -203,8 +208,6 @@ data Drawable = forall a. Draw a => Drawable a
 
 class Draw a where
     draw :: a -> C.Render ()
-
---TODO: Arc?
 
 instance Draw Drawable where
     draw (Drawable x) = draw x
@@ -227,6 +230,12 @@ instance Draw (Bezier Double, Bezier Double) where
 
 instance Draw (I.Interval Double, I.Interval Double) where
     draw (x, y) = C.rectangle (I.inf x) (I.inf y) (I.extent x) (I.extent y)
+
+instance Draw (I.Interval Double, Double) where
+    draw (x, y) = draw (Linear (I.inf x) (I.sup x), Linear y y)
+
+instance Draw (Double, I.Interval Double) where
+    draw (x, y) = draw (Linear x x, Linear (I.inf y) (I.sup y))
 
 class Color a where
     setColor :: a -> C.Render ()
@@ -253,10 +262,57 @@ instance (Drawable (a, a)) => Drawable (Pw (a, a)) where
 
 
 -----------------------------------------------------------------------------
+-- Debugging Utilities
+-----------------------------------------------------------------------------
+
+mkOnceIO :: IO a -> IO (IO a)
+mkOnceIO io = do
+  mv <- newEmptyMVar
+  demand <- newEmptyMVar
+  forkIO (takeMVar demand >> io >>= putMVar mv)
+  return (tryPutMVar demand () >> readMVar mv)
+
+
+watchChannel :: MVar [(String, String)]
+-- DOUBLY UNSAFE!
+watchChannel = unsafePerformIO getChan
+ where getChan = unsafePerformIO $ mkOnceIO $ newMVar []
+
+watchPredicate :: MVar (String -> Bool)
+watchPredicate = unsafePerformIO getPred
+ where getPred = unsafePerformIO $ mkOnceIO $ newMVar $ const True
+
+watch :: (Show a) => String -> a -> a
+watch n x = watch' n (show x) x
+
+watch' :: String -> String -> a -> a
+watch' n m x = unsafePerformIO $ do
+  pred <- readMVar watchPredicate
+  when (pred n) $ do
+    modifyMVar_ watchChannel (return . ((n,m):))
+  return x
+
+whileM p a = do
+  c <- p
+  if c then a >>= (\x -> liftM (x:) (whileM p a)) else return []
+
+printWatches :: IO ()
+printWatches = mapM_ (putStrLn . (\(a, b) -> a ++ ":\n" ++ b) . last)
+             . groupBy ((==) `on` fst) . sortBy (comparing fst)
+           =<< readMVar watchChannel
+
+{-
+drawChannel :: DRect -> CRender ()
+drawChannel = do
+  chan <- C.liftIO $ readIORef watchChannel
+  whileM (C.liftIO $ liftM not $ isEmptyChan chan) $ do
+-}   
+
+-----------------------------------------------------------------------------
 -- Example code follows
 -----------------------------------------------------------------------------
 
-mouse1 :: Maybe (Bool, Int) -> (Double, Double) ->
+mouse1 :: Maybe (Bool, Int) -> DPoint ->  
   Focusable Handle -> IO (Focusable Handle)
 mouse1 (Just (True, 0))  p = return . clickElement (Just $ Handle "hi" p (1.0,0,0)) p
 mouse1 (Just (False, 0)) p = return . changeFocus Nothing
@@ -276,11 +332,11 @@ demo1 = (dummyToy ([], Nothing))
 
 type DSlider = Slider Double
 
-dline :: (Double, Double) -> (Double, Double) -> DLine
+dline :: DPoint -> DPoint -> DLine
 dline (x1, y1) (x2, y2) = (Linear x1 x2, Linear y1 y2)
 
-mouse2 :: Maybe (Bool, Int) -> (Double, Double) ->
-  Focusable (Slider Double) -> IO (Focusable (Slider Double))
+mouse2 :: Maybe (Bool, Int) -> DPoint
+       -> Focusable (Slider Double) -> IO (Focusable (Slider Double))
 mouse2 (Just (True, 0))  p = return . clickElement
   (Just $ mkSlider (0 I.... 100) 0 (dline p (p ^+^ (0,100))) (1.0,0,0)) p
 mouse2 (Just (False, 0)) _ = return . changeFocus Nothing

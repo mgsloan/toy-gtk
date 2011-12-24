@@ -13,6 +13,7 @@
 module Graphics.ToyFramework.Core
   ( Toy(..), KeyTable, KeyInfo, IRect, IPnt
   , dummyToy, runToy, runToyState, quit
+  , G.DrawWindow
   ) where 
 
 import Control.Arrow
@@ -34,25 +35,25 @@ data Toy a = Toy
   { initialState :: a
 
   -- Given the current keyboard state, perform a single 30ms periodic execution.
-  , tick    :: KeyTable                              -> a -> IO a
+  , tick     :: KeyTable                              -> a -> IO a
 
   -- Display using cairo, based on the canvas size and dirty region.
-  , display :: IPnt -> IRect                         -> a -> C.Render a
+  , display :: G.DrawWindow -> IPnt -> IRect         -> a -> C.Render a
 
   -- Handle mouse presses (first parameter is (pressed?, which)) and motion.
-  , mouse   :: Maybe (Bool, Int) -> (Double, Double) -> a -> IO a
+  , mouse    :: Maybe (Bool, Int) -> (Double, Double) -> a -> IO a
 
   -- Handle key-presses, first parameter is "pressed?", second is (Left string)
   -- to give the names of non-character keys, and (Right char) for the rest.
-  , key     :: Bool -> Either String Char            -> a -> IO a
+  , key      :: Bool -> Either String Char            -> a -> IO a
   }
 
 dummyToy x = Toy
   { initialState = x
-  , tick    = const $ return . id
-  , display = const $ const $ return . id
-  , mouse   = const $ const $ return . id
-  , key     = const $ const $ return . id
+  , tick     = const $ return . id
+  , display  = const $ const $ const $ return . id
+  , mouse    = const $ const $ return . id
+  , key      = const $ const $ return . id
   }
 
 updateState :: IORef (a, b) -> (b -> IO b) -> (a -> a) -> IO ()
@@ -92,7 +93,7 @@ runToyState toy = do
     let r = ((x, y), (x + w, y + h))
     dw <- G.widgetGetDrawWindow canvas
     sz <- G.widgetGetSize canvas
-    updateRef state $ secondIO $ G.renderWithDrawable dw . display toy sz r
+    updateRef state $ secondIO $ G.renderWithDrawable dw . display toy dw sz r
 
   G.set window $ [G.containerChild G.:= canvas]
   G.widgetShowAll window

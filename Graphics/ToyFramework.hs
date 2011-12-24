@@ -23,7 +23,7 @@ module Graphics.ToyFramework
   , apipe
   , move, relMove, line, pathBounds, textSize, textRect, relText, drawArrow
   , Draw(..), Drawable(..), Color(..)
-  , mkOnceIO, watchChannel, watchPredicate, watch, watch', printWatches
+  , mkOnceIO, watchChannel, watchPredicate, watch, watch', watchWith, printWatches
   , module Graphics.ToyFramework.Core
   ) where
 
@@ -156,8 +156,8 @@ focusToList :: Focusable a -> [a]
 focusToList (xs, Just x) = x : xs
 focusToList (xs, Nothing) = xs
 
-displayFocusable :: (Draw a) => IPnt -> IRect -> Focusable a -> C.Render (Focusable a)
-displayFocusable = const $ const $ apipe (mapM_ draw . focusToList)
+displayFocusable :: (Draw a) => DrawWindow -> IPnt -> IRect -> Focusable a -> C.Render (Focusable a)
+displayFocusable = const $ const $ const $ apipe (mapM_ draw . focusToList)
 
 moveFocusable :: (Eq a, Positionable a) => (DPoint -> Focusable a -> Maybe a) ->
   DPoint -> Focusable a -> Focusable a
@@ -282,6 +282,9 @@ watchPredicate :: MVar (String -> Bool)
 watchPredicate = unsafePerformIO getPred
  where getPred = unsafePerformIO $ mkOnceIO $ newMVar $ const True
 
+watchWith :: (a -> String) -> String -> a -> a
+watchWith f n x = watch' n (f x) x
+
 watch :: (Show a) => String -> a -> a
 watch n x = watch' n (show x) x
 
@@ -292,14 +295,14 @@ watch' n m x = unsafePerformIO $ do
     modifyMVar_ watchChannel (return . ((n,m):))
   return x
 
+
 whileM p a = do
   c <- p
   if c then a >>= (\x -> liftM (x:) (whileM p a)) else return []
 
 printWatches :: IO ()
-printWatches = mapM_ (putStrLn . (\(a, b) -> a ++ ":\n" ++ b) . last)
-             . groupBy ((==) `on` fst) . sortBy (comparing fst)
-           =<< readMVar watchChannel
+printWatches = mapM_ (putStrLn . (\(a, b) -> a ++ ":\n" ++ b))
+           =<< modifyMVar watchChannel (return . ([],))
 
 {-
 drawChannel :: DRect -> CRender ()

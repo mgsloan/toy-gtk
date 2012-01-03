@@ -4,7 +4,6 @@
 -- Module      :  Graphics.UI.Gtk.Toy
 -- Copyright   :  (c) 2011 Michael Sloan 
 -- License     :  BSD-style (see the LICENSE file)
---
 -- Maintainer  :  Michael Sloan <mgsloan@gmail.com>
 -- Stability   :  experimental
 -- Portability :  GHC only
@@ -15,18 +14,20 @@
 -- the input events into more palatable data structures.
 
 module Graphics.UI.Gtk.Toy
- ( KeyInfo, KeyTable, InputState(..), Interactive(..)
+  (
+    KeyInfo, KeyTable, InputState(..), Interactive(..)
+  , runToy, quitToy
 
- -- InputState accessors.
- , keyInfo, keyHeld, mousePos, mouseHeld
+  -- * InputState Accessors.
+  , keyInfo, keyHeld, mousePos, mouseHeld
 
- -- Functions to allow for cleaner implementations of the Interactive class's
- -- members.
- , simpleTick, simpleDisplay, simpleMouse, simpleKeyboard
+  -- * Utilities for writing Interactive instances.
 
- -- This is how you turn an instance of Interactive into an application.
- , runToy, quitToy
- ) where
+  -- | Functions to allow for writing simpler, pure implementations of the
+  --   different members of Interactive.
+  , simpleTick, simpleDisplay, simpleMouse, simpleKeyboard
+
+  ) where
 
 import Control.Arrow ((&&&))
 import Control.Monad (when)
@@ -84,6 +85,11 @@ keyHeld name inp = case keyInfo name inp of
   (Just (True, _, _)) -> True
   _ -> False
 
+-- | Postfixes "_L" and "_R" on the key name, and returns true if either of
+--   those keys are being held. 
+eitherHeld :: String -> InputState -> Bool
+eitherHeld key inp = (keyHeld (key ++ "_L") inp || keyHeld (key ++ "_R") inp)
+
 -- | Accesses the most recently reported mouse position.
 mousePos :: InputState -> (Double, Double)
 mousePos (InputState p _) = p
@@ -95,12 +101,12 @@ mouseHeld ix = keyHeld ("Mouse" ++ show ix)
 -- Convenience functions to use pure functions that don't need the InputState.
 
 -- | Converts a pure state transform to a function for Interactive 'tick'.
-simpleTick :: (a -> a) 
+simpleTick :: (a -> a)
            -> InputState -> a -> IO (a, Bool)
 simpleTick f _ = return . (, True) . f
 
 -- | Converts a diagram projection to a function for Interactive 'display'.
-simpleDisplay :: (G.DrawWindow -> a -> a) 
+simpleDisplay :: (G.DrawWindow -> a -> a)
               -> G.DrawWindow -> InputState -> a -> IO a
 simpleDisplay f dw _ = return . f dw
 
@@ -113,7 +119,7 @@ simpleMouse f c inp = return . f (mousePos inp) c
 
 -- | Converts a function which responds to mouse-presses, and transforms state
 -- accordingly to a function for Interactive 'mouse'.
-simpleMouseClick :: ((Double, Double) -> (Bool, Int) -> a -> a) 
+simpleMouseClick :: ((Double, Double) -> (Bool, Int) -> a -> a)
                  -> Maybe (Bool, Int)
                  -> InputState -> a -> IO a
 simpleMouseClick f (Just c) inp = return . f (mousePos inp) c
@@ -148,14 +154,14 @@ runToy toy = do
 
   G.windowSetDefaultSize window 640 480
 
-  G.onKeyPress   window $ (>> doRedraw) . handleKey state 
-  G.onKeyRelease window $ (>> doRedraw) . handleKey state 
+  G.onKeyPress   window $ (>> doRedraw) . handleKey state
+  G.onKeyRelease window $ (>> doRedraw) . handleKey state
 
   G.onMotionNotify  canvas True $ (>> doRedraw) . handleMotion state
   G.onButtonPress   window      $ (>> doRedraw) . handleButton state
   G.onButtonRelease window      $ (>> doRedraw) . handleButton state
 
-  G.onExposeRect canvas $ \(G.Rectangle x y w h) -> do 
+  G.onExposeRect canvas $ \(G.Rectangle x y w h) -> do
     let r = ((x, y), (x + w, y + h))
     dw <- G.widgetGetDrawWindow canvas
     sz <- G.widgetGetSize canvas
@@ -180,7 +186,7 @@ handleKey st ev = do
   let inp' = InputState p (M.insert name (pres, time, mods) m)
   x' <- keyboard pres (maybe (Left name) Right char) inp' x
   writeIORef st (inp', x')
- where 
+ where
   name = E.eventKeyName ev
   char = E.eventKeyChar ev
   time = fromIntegral $ E.eventTime ev
@@ -193,7 +199,7 @@ handleMotion st ev = do
   let inp' = InputState pos m
   x' <- mouse Nothing inp' x
   writeIORef st (inp', x')
- where 
+ where
   pos = (E.eventX ev, E.eventY ev)
 
 handleButton :: Interactive a => IORef (InputState, a) -> E.Event -> IO ()
@@ -204,7 +210,7 @@ handleButton st ev = do
         inp' = InputState pos m'
     x' <- mouse (Just (pressed, but)) inp' x
     writeIORef st (inp', x')
- where 
+ where
   pos = (E.eventX ev, E.eventY ev)
   time = fromIntegral $ E.eventTime ev
   mods = E.eventModifier ev
@@ -215,4 +221,4 @@ handleButton st ev = do
     E.RightButton -> 1
     E.MiddleButton -> 2
 --TODO: guaranteed to not be 0,1,2?
-    E.OtherButton ix -> ix 
+    E.OtherButton ix -> ix

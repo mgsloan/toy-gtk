@@ -12,7 +12,7 @@
 -- applications which draw things and interact with the mouse and keyboard.  It
 -- handles the minutae of setting up the Gtk window and canvas, and processes
 -- the input events into more palatable data structures.
-
+-----------------------------------------------------------------------------
 module Graphics.UI.Gtk.Toy
   (
     KeyInfo, KeyTable, InputState(..), Interactive(..)

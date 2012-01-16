@@ -26,6 +26,7 @@ module Graphics.UI.Gtk.Toy
   -- | Functions to allow for writing simpler, pure implementations of the
   --   different members of Interactive.
   , simpleTick, simpleDisplay, simpleMouse, simpleKeyboard
+  , quitKeyboard
 
   ) where
 
@@ -43,7 +44,7 @@ type KeyTable = M.Map String KeyInfo
 data InputState = InputState (Double, Double) KeyTable
 
 -- | A class for things which can be drawn and change within an interactive
---   context.
+--   context.  The default method implementations do nothing.
 class Interactive a where
 
   -- | @tick@ is (ideally) called every 30ms.  The bool result indicates if the
@@ -136,6 +137,12 @@ simpleKeyboard :: (Bool -> Either String Char -> a -> a)
                -> (Bool -> Either String Char -> InputState -> a -> IO a)
 simpleKeyboard f p k _ = return . f p k
 
+-- | A definition for the keyboard handler that just calls "quitToy" when
+--   Escape is pressed.
+quitKeyboard :: Bool -> Either String Char -> InputState -> a -> IO a
+quitKeyboard True (Left "Escape") _ x = quitToy >> return x
+quitKeyboard _ _ _ x = return x
+
 -- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'
 quitToy :: IO ()
 quitToy = G.mainQuit
@@ -151,13 +158,12 @@ runToy toy = do
   state <- newIORef (InputState (0, 0) M.empty, toy)
 
   let doRedraw = G.widgetQueueDraw canvas >> return True
-
   G.windowSetDefaultSize window 640 480
 
   G.onKeyPress   window $ (>> doRedraw) . handleKey state
   G.onKeyRelease window $ (>> doRedraw) . handleKey state
 
-  G.onMotionNotify  canvas True $ (>> doRedraw) . handleMotion state
+  G.onMotionNotify  window True $ (>> doRedraw) . handleMotion state
   G.onButtonPress   window      $ (>> doRedraw) . handleButton state
   G.onButtonRelease window      $ (>> doRedraw) . handleButton state
 
@@ -172,13 +178,17 @@ runToy toy = do
   G.set window $ [G.containerChild G.:= canvas]
   G.widgetShowAll window
 
-  G.timeoutAddFull (do
-    (state', redraw) <- uncurry tick =<< readIORef state
-    when redraw (doRedraw >> return ())
-    return True)
-      G.priorityDefaultIdle 30
+  let tickHandler = do
+        st@(inp, _) <- readIORef state
+        (state', redraw) <- uncurry tick st
+        when redraw (doRedraw >> return ())
+        writeIORef state (inp, state')
+        return True
+  
+  G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
 
   G.mainGUI
+ where
 
 handleKey :: Interactive a => IORef (InputState, a) -> E.Event -> IO ()
 handleKey st ev = do

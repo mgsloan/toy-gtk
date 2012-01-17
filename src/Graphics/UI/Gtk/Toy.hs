@@ -32,9 +32,7 @@ module Graphics.UI.Gtk.Toy
 
   ) where
 
-import Control.Arrow ((&&&))
 import Control.Monad (when)
-import Data.Char (toLower)
 import Data.IORef
 import qualified Data.Map as M
 import qualified Graphics.UI.Gtk as G

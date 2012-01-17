@@ -20,6 +20,8 @@ Source-repository head
 
 Library
   Extensions:        TupleSections, ViewPatterns
-  Build-Depends:     base, gtk, containers
+  Build-Depends:     base >= 4.2 && < 4.6,
+                     gtk >= 0.12.0 && < 0.13.0,
+                     containers
   Hs-source-dirs:    src
   Exposed-Modules:   Graphics.UI.Gtk.Toy

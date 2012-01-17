@@ -1,6 +1,4 @@
-{-# LANGUAGE TupleSections
-           , UndecidableInstances
-           , ViewPatterns #-}
+{-# LANGUAGE TupleSections, ViewPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Graphics.UI.Gtk.Toy

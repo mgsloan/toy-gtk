@@ -1,5 +1,5 @@
 Name:                gtk-toy
-Version:             0.1.0
+Version:             0.1.1
 Cabal-Version:       >= 1.6
 Synopsis:            Convenient Gtk canvas with mouse and keyboard input.
 Category:            Graphics, GUI
@@ -21,7 +21,7 @@ Source-repository head
 Library
   Extensions:        TupleSections, ViewPatterns
   Build-Depends:     base >= 4.2 && < 4.6,
-                     gtk >= 0.12.0 && < 0.13.0,
-                     containers
+                     containers,
+                     gtk >= 0.12.0 && < 0.13.0
   Hs-source-dirs:    src
   Exposed-Modules:   Graphics.UI.Gtk.Toy

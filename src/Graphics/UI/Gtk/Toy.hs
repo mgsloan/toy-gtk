@@ -13,10 +13,11 @@
 --
 -- It handles the minutiae of setting up the Gtk window and canvas, and
 -- processes mouse and keyboard inputs into more palatable data structures.
+--
 -----------------------------------------------------------------------------
 module Graphics.UI.Gtk.Toy
-  (
-    KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..), Interactive(..)
+  ( KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..)
+  , Interactive(..), GtkInteractive(..)
   , runToy, quitToy
 
   -- * InputState Accessors
@@ -61,16 +62,12 @@ type KeyEvent = (Bool, Either String Char)
 --   provides mouse press information.
 type MouseEvent = Maybe (Bool, Int)
 
--- | A class for things which can be drawn and change within an interactive
---   context.  The default method implementations do nothing.
+-- | A class for things which change within an interactive context.  The default
+--   method implementations do nothing.
 class Interactive a where
-
   -- | @tick@ is (ideally) called every 30ms.  The bool result indicates if the
   --   graphics need to be refreshed.
   tick                     :: InputState -> a -> IO (a, Bool)
-
-  -- | @display@ is called when the rendering needs to be refreshed.
-  display  :: G.DrawWindow -> InputState -> a -> IO a
 
   -- | @mouse@ is called when the mouse moves or presses occur.
   mouse    :: MouseEvent   -> InputState -> a -> IO a
@@ -80,13 +77,17 @@ class Interactive a where
 
   -- No-op defaults.
   tick _ = return . (, False)
-  display  _ _ = return
   mouse    _ _ = return
   keyboard _ _ = return
 
+class Interactive a => GtkInteractive a where
+  -- | @display@ is called when the rendering needs to be refreshed.
+  display  :: G.DrawWindow -> InputState -> a -> IO a
+  display _ _ = return
+
 -- InputState Queries.
 
--- | Gets the information for the most recent key event of the named key.  
+-- |  the information for the most recent key event of the named key.  
 keyInfo :: String -> InputState -> Maybe KeyInfo
 keyInfo name = M.lookup name . keyTable
 
@@ -96,7 +97,7 @@ keyHeld name (keyInfo name -> Just (True, _, _)) = True
 keyHeld _ _ = False
 
 -- | Postfixes "_L" and "_R" on the key name, and returns true if either of
---   those keys are being held. 
+--   those keys are being held.
 eitherHeld :: String -> InputState -> Bool
 eitherHeld key inp = (keyHeld (key ++ "_L") inp || keyHeld (key ++ "_R") inp)
 
@@ -149,7 +150,7 @@ quitToy = G.mainQuit
 
 -- | Main program entrypoint. This is how you turn an instance of Interactive
 --   into an application.
-runToy :: Interactive a => a -> IO ()
+runToy :: GtkInteractive a => a -> IO ()
 runToy toy = do
   G.initGUI
 

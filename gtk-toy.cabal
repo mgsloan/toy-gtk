@@ -1,5 +1,5 @@
 Name:                gtk-toy
-Version:             0.1.1
+Version:             0.2.0
 Cabal-Version:       >= 1.6
 Synopsis:            Convenient Gtk canvas with mouse and keyboard input.
 Category:            Graphics, GUI
@@ -11,7 +11,7 @@ Description:
 License:             BSD3
 License-file:        LICENSE
 Author:              Michael Sloan
-Maintainer:          Michael Sloan <mgsloan@gmail.com>
+Maintainer:          Michael Sloan <mgsloan at gmail>
 Stability:           experimental
 Build-Type:          Simple
 Source-repository head

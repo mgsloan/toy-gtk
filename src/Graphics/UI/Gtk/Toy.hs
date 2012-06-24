@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections, ViewPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Graphics.UI.Gtk.Toy
@@ -18,6 +17,8 @@
 module Graphics.UI.Gtk.Toy
   ( KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..)
   , Interactive(..), GtkInteractive(..)
+  , QuitToy(..)
+
   , runToy, quitToy
 
   -- * InputState Accessors
@@ -31,6 +32,7 @@ module Graphics.UI.Gtk.Toy
 
   ) where
 
+import Control.Arrow (first)
 import Control.Monad (when)
 import Data.IORef
 import qualified Data.Map as M
@@ -148,6 +150,21 @@ quitKeyboard _ _ x = return x
 quitToy :: IO ()
 quitToy = G.mainQuit
 
+newtype QuitToy a = QuitToy a
+
+-- I would use Control.Newtype and newtype-th, but I feel like this package
+-- benefits from staying Haskell 98 and minimizing dependencies
+overM f (QuitToy x) = f x >>= return . QuitToy
+
+instance Interactive a => Interactive (QuitToy a) where
+  tick i (QuitToy x) = tick i x >>= return . first QuitToy
+  mouse m i = overM $ mouse m i
+  keyboard (True, (Left "Escape")) _ = (quitToy >>) . return
+  keyboard k i = overM $ keyboard k i
+
+instance GtkInteractive a => GtkInteractive (QuitToy a) where
+  display dw i = overM $ display dw i
+
 -- | Main program entrypoint. This is how you turn an instance of Interactive
 --   into an application.
 runToy :: GtkInteractive a => a -> IO ()
@@ -176,6 +193,8 @@ runToy toy = do
     x' <- display dw inp x
     writeIORef state (inp, x')
 
+  G.onDestroy window quitToy
+
   G.set window $ [G.containerChild G.:= canvas]
   G.widgetShowAll window
 
@@ -189,7 +208,6 @@ runToy toy = do
   G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
 
   G.mainGUI
- where
 
 handleKey :: Interactive a => IORef (InputState, a) -> E.Event -> IO ()
 handleKey st ev = do

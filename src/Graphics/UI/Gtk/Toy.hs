@@ -29,7 +29,8 @@ module Graphics.UI.Gtk.Toy
   --   different members of Interactive.
   , simpleTick, simpleDisplay, simpleMouse, simpleKeyboard
 
-  -- Convenience for building key-handlers
+  -- * Key Handlers
+  -- | Monadic convenience for building implementations of 'keyboard'.
   , KeyHandler, keyHandler, escapeKeyHandler
   , handleKeys
   ) where
@@ -165,9 +166,11 @@ keyHandler f = do
   put (ke, is, x')
 
 -- | Calls 'quitToy' when the escape key is pressed.
+escapeKeyHandler :: KeyHandler a
 escapeKeyHandler
   = keyHandler
-  $ \ke _ -> when (ke == (True, Left "Escape")) quitToy
+  $ \ke x -> when (ke == (True, Left "Escape")) quitToy 
+          >> return x
 
 -- | Main program entry-point. This is how you turn an instance of 'Interactive'
 --   into an application.

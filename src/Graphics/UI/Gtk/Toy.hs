@@ -18,7 +18,8 @@ module Graphics.UI.Gtk.Toy
   ( KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..)
   , Interactive(..), GtkInteractive(..)
 
-  , runToy, quitToy
+  , Toy(..)
+  , newToy, runToy, quitToy
 
   -- * InputState Accessors
   , keyInfo, keyHeld, mouseHeld
@@ -173,11 +174,38 @@ runToy toy = do
   G.initGUI
 
   window <- G.windowNew
+  G.windowSetDefaultSize window 640 480
+
+  canvas <- newToy toy
+
+  G.set window $ [G.containerChild G.:= toyWindow canvas]
+  G.widgetShowAll window
+
+--TODO: tell the toy that we're going dowm
+--TODO: or better would catch onDelete events and ask toy what to do
+  G.onDestroy window quitToy
+
+  G.mainGUI
+
+-- | Subroutine data.
+data Toy a = Toy
+  { -- | This root widget catches interactive events.  Pack this into your GUI.
+    toyWindow :: G.EventBox
+  , -- | This child widget does the drawing.
+    toyCanvas :: G.DrawingArea
+  , -- | This contains our world, exposed so that your other worlds can interfere.
+    toyState  :: IORef (InputState, a)
+  }
+
+-- | Subroutine entrypoint. This is how you turn an instance of Interactive
+--   into a widget-like thing.
+newToy :: GtkInteractive a => a -> IO (Toy a)
+newToy toy = do
+  window <- G.eventBoxNew
   canvas <- G.drawingAreaNew
   state <- newIORef (InputState (0, 0) M.empty, toy)
 
   let doRedraw = G.widgetQueueDraw canvas >> return True
-  G.windowSetDefaultSize window 640 480
 
   G.onKeyPress   window $ (>> doRedraw) . handleKey state
   G.onKeyRelease window $ (>> doRedraw) . handleKey state
@@ -194,10 +222,7 @@ runToy toy = do
     x' <- display dw inp x
     writeIORef state (inp, x')
 
-  G.onDestroy window quitToy
-
   G.set window $ [G.containerChild G.:= canvas]
-  G.widgetShowAll window
 
   let tickHandler = do
         st@(inp, _) <- readIORef state
@@ -207,8 +232,13 @@ runToy toy = do
         return True
   
   G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
+--TODO: how does this timer behave when hiding / reshowing windows?
+--TODO: do we want timer to run only when window is visible?
+--TODO: definitely want timer to stop when widgets are permanently gone
+  timer <- G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
+  G.onUnrealize window $ G.timeoutRemove timer
 
-  G.mainGUI
+  return $ Toy window canvas state
 
 handleKey :: Interactive a => IORef (InputState, a) -> E.Event -> IO ()
 handleKey st ev = do

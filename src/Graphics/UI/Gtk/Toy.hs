@@ -17,7 +17,6 @@
 module Graphics.UI.Gtk.Toy
   ( KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..)
   , Interactive(..), GtkInteractive(..)
-  , QuitToy(..)
 
   , runToy, quitToy
 
@@ -33,7 +32,8 @@ module Graphics.UI.Gtk.Toy
   ) where
 
 import Control.Arrow (first)
-import Control.Monad (when)
+import Control.Monad (when, liftM)
+import Control.Monad.State (StateT, execStateT)
 import Data.IORef
 import qualified Data.Map as M
 import qualified Graphics.UI.Gtk as G
@@ -67,8 +67,8 @@ type MouseEvent = Maybe (Bool, Int)
 -- | A class for things which change within an interactive context.  The default
 --   method implementations do nothing.
 class Interactive a where
-  -- | @tick@ is (ideally) called every 30ms.  The bool result indicates if the
-  --   graphics need to be refreshed.
+  -- | @tick@ is (ideally) called every 30ms.  The @Bool@ result indicates if
+  --   the graphics need to be refreshed.
   tick                     :: InputState -> a -> IO (a, Bool)
 
   -- | @mouse@ is called when the mouse moves or presses occur.
@@ -89,7 +89,7 @@ class Interactive a => GtkInteractive a where
 
 -- InputState Queries.
 
--- |  the information for the most recent key event of the named key.  
+-- | Gets the information for the most recent key event of the named key.
 keyInfo :: String -> InputState -> Maybe KeyInfo
 keyInfo name = M.lookup name . keyTable
 
@@ -140,32 +140,33 @@ simpleKeyboard :: (KeyEvent -> a -> a)
                -> (KeyEvent -> InputState -> a -> IO a)
 simpleKeyboard f e _ = return . f e
 
--- | A definition for the keyboard handler that just calls "quitToy" when
---   Escape is pressed.
-quitKeyboard :: KeyEvent -> InputState -> a -> IO a
-quitKeyboard (True, (Left "Escape")) _ x = quitToy >> return x
-quitKeyboard _ _ x = return x
-
 -- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'
 quitToy :: IO ()
 quitToy = G.mainQuit
 
-newtype QuitToy a = QuitToy a
+-- | KeyHandlers allow you to monadically sequence a series of different
+--   functions to handle keys, without worrying about plumbing the parameters.
+type KeyHandler a = StateT (KeyEvent, InputState, a) IO ()
 
--- I would use Control.Newtype and newtype-th, but I feel like this package
--- benefits from staying Haskell 98 and minimizing dependencies
-overM f (QuitToy x) = f x >>= return . QuitToy
+-- | Convenience function for turning a @KeyHandler@s into a function
+--   appropriate for @keyboard@.
+handleKeys :: KeyHandler a -> KeyEvent -> InputState -> a -> IO a
+handleKeys kh ke is x = liftM (\(_,_,x) -> x) $ execStateT kh (ke, is, x)
 
-instance Interactive a => Interactive (QuitToy a) where
-  tick i (QuitToy x) = tick i x >>= return . first QuitToy
-  mouse m i = overM $ mouse m i
-  keyboard (True, (Left "Escape")) _ = (quitToy >>) . return
-  keyboard k i = overM $ keyboard k i
+-- | Turns a function from @KeyEvent@s to imperative state mutation into a
+--   keyHandler.  It's handy to use this with @Control.Monad.when@.
+keyHandler :: (KeyEvent -> a -> IO a) -> KeyHandler a
+keyHandler f = do
+  (ke, is, x) <- get
+  x' <- lift $ f ke x
+  set (ke, is, x')
 
-instance GtkInteractive a => GtkInteractive (QuitToy a) where
-  display dw i = overM $ display dw i
+-- | Calls @quitToy@ when the escape key is pressed.
+escapeKeyHandler
+  = keyHandler
+  $ \ke _ -> when (ke == (True, Left "Escape")) quitToy
 
--- | Main program entrypoint. This is how you turn an instance of Interactive
+-- | Main program entry-point. This is how you turn an instance of @Interactive@
 --   into an application.
 runToy :: GtkInteractive a => a -> IO ()
 runToy toy = do

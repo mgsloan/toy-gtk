@@ -21,6 +21,7 @@ Source-repository head
 Library
   Extensions:        TupleSections, ViewPatterns
   Build-Depends:     base >= 4.2 && < 4.6,
+                     mtl >= 2.0,
                      containers,
                      gtk >= 0.12.0 && < 0.13.0
   Hs-source-dirs:    src

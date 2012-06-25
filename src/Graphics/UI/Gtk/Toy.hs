@@ -18,8 +18,8 @@ module Graphics.UI.Gtk.Toy
   ( KeyInfo, KeyTable, MouseEvent, KeyEvent, InputState(..)
   , Interactive(..), GtkInteractive(..)
 
-  , Toy(..)
-  , newToy, runToy, quitToy
+  , Toy(..), newToy
+  , runToy, quitToy
 
   -- * InputState Accessors
   , keyInfo, keyHeld, mouseHeld
@@ -28,13 +28,15 @@ module Graphics.UI.Gtk.Toy
   -- | Functions to allow for writing simpler, pure implementations of the
   --   different members of Interactive.
   , simpleTick, simpleDisplay, simpleMouse, simpleKeyboard
-  , quitKeyboard
 
+  -- Convenience for building key-handlers
+  , KeyHandler, keyHandler, escapeKeyHandler
+  , handleKeys
   ) where
 
 import Control.Arrow (first)
 import Control.Monad (when, liftM)
-import Control.Monad.State (StateT, execStateT)
+import Control.Monad.State (StateT, execStateT, get, put, lift)
 import Data.IORef
 import qualified Data.Map as M
 import qualified Graphics.UI.Gtk as G
@@ -61,14 +63,14 @@ data InputState = InputState
 --   GTK-convention names for the rest.
 type KeyEvent = (Bool, Either String Char)
 
--- | A @MouseEvent@ is @Nothing@ if it's a mouse motion event, and otherwise
+-- | A @MouseEvent@ is 'Nothing' if it's a mouse motion event, and otherwise
 --   provides mouse press information.
 type MouseEvent = Maybe (Bool, Int)
 
 -- | A class for things which change within an interactive context.  The default
 --   method implementations do nothing.
 class Interactive a where
-  -- | @tick@ is (ideally) called every 30ms.  The @Bool@ result indicates if
+  -- | @tick@ is (ideally) called every 30ms.  The 'Bool' result indicates if
   --   the graphics need to be refreshed.
   tick                     :: InputState -> a -> IO (a, Bool)
 
@@ -99,7 +101,7 @@ keyHeld :: String -> InputState -> Bool
 keyHeld name (keyInfo name -> Just (True, _, _)) = True
 keyHeld _ _ = False
 
--- | Postfixes "_L" and "_R" on the key name, and returns true if either of
+-- | Postfixes \"_L\" and \"_R\" on the key name, and returns true if either of
 --   those keys are being held.
 eitherHeld :: String -> InputState -> Bool
 eitherHeld key inp = (keyHeld (key ++ "_L") inp || keyHeld (key ++ "_R") inp)
@@ -149,25 +151,25 @@ quitToy = G.mainQuit
 --   functions to handle keys, without worrying about plumbing the parameters.
 type KeyHandler a = StateT (KeyEvent, InputState, a) IO ()
 
--- | Convenience function for turning a @KeyHandler@s into a function
---   appropriate for @keyboard@.
+-- | Convenience function for turning a 'KeyHandler's into a function
+--   appropriate for 'keyboard'.
 handleKeys :: KeyHandler a -> KeyEvent -> InputState -> a -> IO a
 handleKeys kh ke is x = liftM (\(_,_,x) -> x) $ execStateT kh (ke, is, x)
 
--- | Turns a function from @KeyEvent@s to imperative state mutation into a
---   keyHandler.  It's handy to use this with @Control.Monad.when@.
+-- | Turns a function from 'KeyEvent's to imperative state mutation into a
+--   keyHandler.  It's handy to use this with 'Control.Monad.when'.
 keyHandler :: (KeyEvent -> a -> IO a) -> KeyHandler a
 keyHandler f = do
   (ke, is, x) <- get
   x' <- lift $ f ke x
-  set (ke, is, x')
+  put (ke, is, x')
 
--- | Calls @quitToy@ when the escape key is pressed.
+-- | Calls 'quitToy' when the escape key is pressed.
 escapeKeyHandler
   = keyHandler
   $ \ke _ -> when (ke == (True, Left "Escape")) quitToy
 
--- | Main program entry-point. This is how you turn an instance of @Interactive@
+-- | Main program entry-point. This is how you turn an instance of 'Interactive'
 --   into an application.
 runToy :: GtkInteractive a => a -> IO ()
 runToy toy = do

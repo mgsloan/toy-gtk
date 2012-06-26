@@ -1,12 +1,12 @@
 Name:                gtk-toy
-Version:             0.2.0
+Version:             0.3.0
 Cabal-Version:       >= 1.6
 Synopsis:            Convenient Gtk canvas with mouse and keyboard input.
 Category:            Graphics, GUI
 Description: 
    The Gtk Toy Framework is a simplifying interface over Gtk for creating
    applications which draw things and interact with the mouse and keyboard.  It
-   handles the minutae of setting up the Gtk window and canvas, and processes
+   handles the minutiae of setting up the Gtk window and canvas, and processes
    the input events into more palatable data structures.
 License:             BSD3
 License-file:        LICENSE
@@ -19,10 +19,9 @@ Source-repository head
   location:          git://github.com/mgsloan/gtk-toy.git
 
 Library
-  Extensions:        TupleSections, ViewPatterns
   Build-Depends:     base >= 4.2 && < 4.6,
-                     mtl >= 2.0,
                      containers,
-                     gtk >= 0.12.0 && < 0.13.0
+                     gtk >= 0.12.0 && < 0.13.0,
+                     toy-interface >= 0.3 && < 0.4
   Hs-source-dirs:    src
-  Exposed-Modules:   Graphics.UI.Gtk.Toy
+  Exposed-Modules:   Graphics.UI.Toy.Gtk

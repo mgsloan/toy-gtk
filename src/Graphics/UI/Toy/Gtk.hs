@@ -140,11 +140,10 @@ newToy toy = do
         writeIORef state (inp, state')
         return True
   
-  G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
 --TODO: how does this timer behave when hiding / reshowing windows?
 --TODO: do we want timer to run only when window is visible?
 --TODO: definitely want timer to stop when widgets are permanently gone
-  timer <- G.timeoutAddFull tickHandler G.priorityDefaultIdle 30
+  timer <- G.timeoutAddFull tickHandler G.priorityHighIdle 30
   G.onUnrealize window $ G.timeoutRemove timer
 
   return $ Toy window canvas state

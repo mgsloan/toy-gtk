@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds,
              EmptyDataDecls,
              FlexibleContexts,
+             ScopedTypeVariables,
              TypeFamilies
   #-}
 -----------------------------------------------------------------------------
@@ -36,23 +37,25 @@ module Graphics.UI.Toy.Gtk
   ) where
 
 import Control.Monad (when)
+import Control.Monad.Reader (lift)
+-- import Control.Monad.Reader ()
 import Data.IORef
 import qualified Data.Map as M
-import qualified Graphics.UI.Gtk as G
-import qualified Graphics.UI.Gtk.Gdk.Events as E
+import Graphics.UI.Gtk
+import Graphics.UI.Gtk.Gdk.EventM
 
 import Graphics.UI.Toy
 
 data Gtk
 
 type instance MousePos Gtk = (Double, Double)
-type instance KeyModifier Gtk = E.Modifier
+type instance KeyModifier Gtk = Modifier
 
 type GtkInteractive a = (Interactive Gtk a, GtkDisplay a)
 
 class GtkDisplay a where
   -- | @display@ is called when the rendering needs to be refreshed.
-  display  :: G.DrawWindow -> InputState Gtk -> a -> IO a
+  display  :: DrawWindow -> InputState Gtk -> a -> IO a
   display _ _ = return
 
 -- | Postfixes \"_L\" and \"_R\" on the key name, and returns true if either of
@@ -61,13 +64,13 @@ eitherHeld :: String -> InputState b -> Bool
 eitherHeld key inp = (keyHeld (key ++ "_L") inp || keyHeld (key ++ "_R") inp)
 
 -- | Converts a diagram projection to a function for Interactive 'display'.
-simpleDisplay :: (G.DrawWindow -> a -> a)
-              -> G.DrawWindow -> InputState Gtk -> a -> IO a
+simpleDisplay :: (DrawWindow -> a -> a)
+              -> DrawWindow -> InputState Gtk -> a -> IO a
 simpleDisplay f dw _ = return . f dw
 
 -- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'
 quitToy :: IO ()
-quitToy = G.mainQuit
+quitToy = mainQuit
 
 -- | Calls 'quitToy' when the escape key is pressed.
 escapeKeyHandler :: KeyHandler Gtk a
@@ -80,113 +83,134 @@ escapeKeyHandler
 --   into an application.
 runToy :: GtkInteractive a => a -> IO ()
 runToy toy = do
-  G.initGUI
+  initGUI
 
-  window <- G.windowNew
-  G.windowSetDefaultSize window 640 480
+  window <- windowNew
+  windowSetDefaultSize window 640 480
 
   canvas <- newToy toy
 
-  G.set window $ [G.containerChild G.:= toyWindow canvas]
-  G.widgetShowAll window
+  set window $ [containerChild := toyWindow canvas]
+  widgetShowAll window
 
 --TODO: tell the toy that we're going dowm
 --TODO: or better would catch onDelete events and ask toy what to do
-  G.onDestroy window quitToy
+  onDestroy window quitToy
 
-  G.mainGUI
+  mainGUI
 
 -- | Subroutine data.
 data Toy a = Toy
   { -- | This root widget catches interactive events.  Pack this into your GUI.
-    toyWindow :: G.EventBox
-  , -- | This child widget does the drawing.
-    toyCanvas :: G.DrawingArea
-  , -- | This contains our world, exposed so that your other worlds can interfere.
+    toyWindow :: EventBox
+  , -- | This child widget does the drawin
+    toyCanvas :: DrawingArea
+  , -- | This contains our world, exposed so that your other worlds can interfer
     toyState  :: IORef (InputState Gtk, a)
   }
 
 -- | Subroutine entrypoint. This is how you turn an instance of Interactive
---   into a widget-like thing.
-newToy :: GtkInteractive a => a -> IO (Toy a)
+--   into a widget-like thin
+newToy :: forall a. GtkInteractive a => a -> IO (Toy a)
 newToy toy = do
-  window <- G.eventBoxNew
-  canvas <- G.drawingAreaNew
+  window <- eventBoxNew
+  canvas <- drawingAreaNew
   state <- newIORef (InputState (0, 0) M.empty, toy)
+  requested <- newIORef True
 
-  let doRedraw = G.widgetQueueDraw canvas >> return True
+  let windowEv :: Signal EventBox (EventM e Bool) 
+               -> (IORef (InputState Gtk, a) -> EventM e ())
+               -> IO (ConnectId EventBox)
+      windowEv e f = on window e $ f state >> lift redraw
 
-  G.onKeyPress   window $ (>> doRedraw) . handleKey state
-  G.onKeyRelease window $ (>> doRedraw) . handleKey state
+      redraw :: IO Bool
+      redraw = do
+        r <- readIORef requested
+        when (not r) $ do
+          widgetQueueDraw canvas
+          writeIORef requested True
+        return True
 
-  G.onMotionNotify  window True $ (>> doRedraw) . handleMotion state
-  G.onButtonPress   window      $ (>> doRedraw) . handleButton state
-  G.onButtonRelease window      $ (>> doRedraw) . handleButton state
+  windowEv keyPressEvent      (handleKey True)
+  windowEv keyReleaseEvent    (handleKey False)
+  windowEv motionNotifyEvent  handleMotion
+  windowEv buttonPressEvent   handleButton
+  windowEv buttonReleaseEvent handleButton
 
-  G.onExposeRect canvas $ \(G.Rectangle x y w h) -> do
+  widgetSetCanFocus window True
+  widgetGrabFocus window
+
+  onExposeRect canvas $ \(Rectangle x y w h) -> do
     let r = ((x, y), (x + w, y + h))
-    dw <- G.widgetGetDrawWindow canvas
-    sz <- G.widgetGetSize canvas
+    dw <- widgetGetDrawWindow canvas
+    sz <- widgetGetSize canvas
     (inp, x) <- readIORef state
     x' <- display dw inp x
     writeIORef state (inp, x')
+    writeIORef requested False
 
-  G.set window $ [G.containerChild G.:= canvas]
+  set window $ [containerChild := canvas]
 
   let tickHandler = do
         st@(inp, _) <- readIORef state
-        (state', redraw) <- uncurry tick st
-        when redraw (doRedraw >> return ())
+        (state', dodraw) <- uncurry tick st
+        when dodraw (redraw >> return ())
         writeIORef state (inp, state')
         return True
   
 --TODO: how does this timer behave when hiding / reshowing windows?
 --TODO: do we want timer to run only when window is visible?
 --TODO: definitely want timer to stop when widgets are permanently gone
-  timer <- G.timeoutAddFull tickHandler G.priorityHighIdle 30
-  G.onUnrealize window $ G.timeoutRemove timer
+  timer <- timeoutAddFull tickHandler priorityHighIdle 60
+  onUnrealize window $ timeoutRemove timer
 
   return $ Toy window canvas state
 
-handleKey :: Interactive Gtk a => IORef (InputState Gtk, a) -> E.Event -> IO ()
-handleKey st ev = do
-  (InputState p m, x) <- readIORef st
-  let inp' = InputState p (M.insert name (pres, time, mods) m)
-  x' <- keyboard (pres, maybe (Left name) Right char) inp' x
-  writeIORef st (inp', x')
- where
-  name = E.eventKeyName ev
-  char = E.eventKeyChar ev
-  time = fromIntegral $ E.eventTime ev
-  mods = E.eventModifier ev
-  pres = not $ E.eventRelease ev
+handleKey :: Interactive Gtk a 
+          => Bool -> IORef (InputState Gtk, a) -> EventM EKey ()
+handleKey press st = do
+  ev    <- eventKeyVal
+  name  <- eventKeyName
+  time  <- eventTime
+  mods  <- eventModifier
 
-handleMotion :: Interactive Gtk a => IORef (InputState Gtk, a) -> E.Event -> IO ()
-handleMotion st ev = do
-  (InputState p m, x) <- readIORef st
-  let inp' = InputState pos m
-  x' <- mouse Nothing inp' x
-  writeIORef st (inp', x')
- where
-  pos = (E.eventX ev, E.eventY ev)
+  let kv = maybe (Left name) Right $ keyToChar ev
 
-handleButton :: Interactive Gtk a => IORef (InputState Gtk, a) -> E.Event -> IO ()
-handleButton st ev = do
-  when (click == E.SingleClick || click == E.ReleaseClick) $ do
+  lift $ do
     (InputState p m, x) <- readIORef st
-    let m' = M.insert ("Mouse" ++ show but) (pressed, time, mods) m
-        inp' = InputState pos m'
-    x' <- mouse (Just (pressed, but)) inp' x
+    let inp' = InputState p (M.insert name (press, fromIntegral time, mods) m)
+    x' <- keyboard (press, kv) inp' x
     writeIORef st (inp', x')
- where
-  pos = (E.eventX ev, E.eventY ev)
-  time = fromIntegral $ E.eventTime ev
-  mods = E.eventModifier ev
-  click = E.eventClick ev
-  pressed = click /= E.ReleaseClick
-  but = case E.eventButton ev of
-    E.LeftButton -> 0
-    E.RightButton -> 1
-    E.MiddleButton -> 2
---TODO: guaranteed to not be 0,1,2?
-    E.OtherButton ix -> ix
+
+handleMotion :: Interactive Gtk a
+             => IORef (InputState Gtk, a) -> EventM EMotion ()
+handleMotion st = do
+  pos   <- eventCoordinates
+  lift $ do
+    (InputState p m, a) <- readIORef st
+    let inp' = InputState pos m
+    a' <- mouse Nothing inp' a
+    writeIORef st (inp', a')
+
+handleButton :: Interactive Gtk a
+             => IORef (InputState Gtk, a) -> EventM EButton ()
+handleButton st = do
+  time  <- eventTime
+  mods  <- eventModifier
+  click <- eventClick
+  bIx   <- eventButton
+  let pres = click /= ReleaseClick
+      buttonIx = case bIx of
+        LeftButton -> 0
+        RightButton -> 1
+        MiddleButton -> 2
+    --TODO: guaranteed to not be 0,1,2?
+        OtherButton ix -> ix
+
+  when (click == SingleClick || click == ReleaseClick) . lift $ do
+    (InputState p m, a) <- readIORef st
+    let m' = M.insert ("Mouse" ++ show buttonIx) 
+                      (pres, fromIntegral time, mods) m
+        inp' = InputState p m'
+    a' <- mouse (Just (pres, buttonIx)) inp' a
+    writeIORef st (inp', a')

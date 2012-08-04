@@ -1,8 +1,11 @@
-{-# LANGUAGE ConstraintKinds,
-             EmptyDataDecls,
-             FlexibleContexts,
-             ScopedTypeVariables,
-             TypeFamilies
+{-# LANGUAGE
+    ConstraintKinds
+  , EmptyDataDecls
+  , FlexibleContexts
+  , FlexibleInstances
+  , ScopedTypeVariables
+  , StandaloneDeriving
+  , TypeFamilies
   #-}
 -----------------------------------------------------------------------------
 -- |
@@ -50,6 +53,9 @@ data Gtk
 
 type instance MousePos Gtk = (Double, Double)
 type instance KeyModifier Gtk = Modifier
+
+deriving instance Eq   (InputState Gtk)
+deriving instance Show (InputState Gtk)
 
 type GtkInteractive a = (Interactive Gtk a, GtkDisplay a)
 

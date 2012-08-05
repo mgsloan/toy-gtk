@@ -143,6 +143,8 @@ newToy toy = do
   windowEv buttonPressEvent   handleButton
   windowEv buttonReleaseEvent handleButton
 
+  widgetAddEvents window [PointerMotionMask, PointerMotionHintMask, ButtonMotionMask]
+
   widgetSetCanFocus window True
   widgetGrabFocus window
 
@@ -175,10 +177,10 @@ newToy toy = do
 handleKey :: Interactive Gtk a 
           => Bool -> IORef (InputState Gtk, a) -> EventM EKey ()
 handleKey press st = do
-  ev    <- eventKeyVal
-  name  <- eventKeyName
-  time  <- eventTime
-  mods  <- eventModifier
+  ev   <- eventKeyVal
+  name <- eventKeyName
+  time <- eventTime
+  mods <- eventModifier
 
   let kv = maybe (Left name) Right $ keyToChar ev
 
@@ -191,7 +193,7 @@ handleKey press st = do
 handleMotion :: Interactive Gtk a
              => IORef (InputState Gtk, a) -> EventM EMotion ()
 handleMotion st = do
-  pos   <- eventCoordinates
+  pos <- eventCoordinates
   lift $ do
     (InputState p m, a) <- readIORef st
     let inp' = InputState pos m
@@ -205,6 +207,7 @@ handleButton st = do
   mods  <- eventModifier
   click <- eventClick
   bIx   <- eventButton
+  pos   <- eventCoordinates
   let pres = click /= ReleaseClick
       buttonIx = case bIx of
         LeftButton -> 0
@@ -217,6 +220,6 @@ handleButton st = do
     (InputState p m, a) <- readIORef st
     let m' = M.insert ("Mouse" ++ show buttonIx) 
                       (pres, fromIntegral time, mods) m
-        inp' = InputState p m'
+        inp' = InputState pos m'
     a' <- mouse (Just (pres, buttonIx)) inp' a
     writeIORef st (inp', a')

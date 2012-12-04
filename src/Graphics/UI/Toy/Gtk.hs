@@ -39,9 +39,8 @@ module Graphics.UI.Toy.Gtk
 
   ) where
 
-import Control.Monad (when)
-import Control.Monad.Reader (lift)
--- import Control.Monad.Reader ()
+import Control.Monad        ( when )
+import Control.Monad.Reader ( lift )
 import Data.IORef
 import qualified Data.Map as M
 import Graphics.UI.Gtk

@@ -19,10 +19,11 @@ Source-repository head
   location:          git://github.com/mgsloan/gtk-toy.git
 
 Library
-  Build-Depends:     base >= 4.2 && < 4.6,
+  Build-Depends:     base >= 4.2 && < 4.7,
                      containers,
                      gtk >= 0.12.0 && < 0.13.0,
                      mtl,
                      toy-interface >= 0.3 && < 0.4
   Hs-source-dirs:    src
+  ghc-options:       -Wall -fwarn-tabs -O2
   Exposed-Modules:   Graphics.UI.Toy.Gtk

@@ -10,7 +10,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Graphics.UI.Toy.Gtk
--- Copyright   :  (c) 2011 Michael Sloan 
+-- Copyright   :  (c) 2011 Michael Sloan
 -- License     :  BSD-style (see the LICENSE file)
 -- Maintainer  :  Michael Sloan <mgsloan@gmail.com>
 -- Stability   :  experimental
@@ -44,7 +44,6 @@ import Control.Monad.Reader ( lift )
 import Data.IORef
 import qualified Data.Map as M
 import Graphics.UI.Gtk
-import Graphics.UI.Gtk.Gdk.EventM
 
 import Graphics.UI.Toy
 
@@ -64,7 +63,8 @@ class GtkDisplay a where
   display _ _ = return
 
 -- | Postfixes \"_L\" and \"_R\" on the key name, and returns true if either of
---   those keys are being held.
+--   those keys are being held.  This is useful for \"Ctrl\", \"Shift\", and
+--   \"Alt\".
 eitherHeld :: String -> InputState b -> Bool
 eitherHeld key inp = (keyHeld (key ++ "_L") inp || keyHeld (key ++ "_R") inp)
 
@@ -73,7 +73,7 @@ simpleDisplay :: (DrawWindow -> a -> a)
               -> DrawWindow -> InputState Gtk -> a -> IO a
 simpleDisplay f dw _ = return . f dw
 
--- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'
+-- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'.
 quitToy :: IO ()
 quitToy = mainQuit
 
@@ -98,7 +98,7 @@ runToy toy = do
   set window $ [containerChild := toyWindow canvas]
   widgetShowAll window
 
---TODO: tell the toy that we're going dowm
+--TODO: tell the toy that we're going down
 --TODO: or better would catch onDelete events and ask toy what to do
   onDestroy window quitToy
 
@@ -106,12 +106,12 @@ runToy toy = do
 
 -- | Subroutine data.
 data Toy a = Toy
-  { -- | This root widget catches interactive events.  Pack this into your GUI.
-    toyWindow :: EventBox
-  , -- | This child widget does the drawin
-    toyCanvas :: DrawingArea
-  , -- | This contains our world, exposed so that your other worlds can interfer
-    toyState  :: IORef (InputState Gtk, a)
+  { toyWindow :: EventBox
+    -- ^ This root widget catches interactive events.  Pack this into your GUI.
+  , toyCanvas :: DrawingArea
+    -- ^ This child widget does the drawin
+  , toyState  :: IORef (InputState Gtk, a)
+    -- ^ This contains our world, exposed so that your other worlds can interfer
   }
 
 -- | Subroutine entrypoint. This is how you turn an instance of Interactive
@@ -147,10 +147,8 @@ newToy toy = do
   widgetSetCanFocus window True
   widgetGrabFocus window
 
-  onExposeRect canvas $ \(Rectangle x y w h) -> do
-    let r = ((x, y), (x + w, y + h))
+  onExposeRect canvas $ \_ -> do
     dw <- widgetGetDrawWindow canvas
-    sz <- widgetGetSize canvas
     (inp, x) <- readIORef state
     x' <- display dw inp x
     writeIORef state (inp, x')
@@ -164,7 +162,7 @@ newToy toy = do
         when dodraw (redraw >> return ())
         writeIORef state (inp, state')
         return True
-  
+
 --TODO: how does this timer behave when hiding / reshowing windows?
 --TODO: do we want timer to run only when window is visible?
 --TODO: definitely want timer to stop when widgets are permanently gone
@@ -194,7 +192,7 @@ handleMotion :: Interactive Gtk a
 handleMotion st = do
   pos <- eventCoordinates
   lift $ do
-    (InputState p m, a) <- readIORef st
+    (InputState _ m, a) <- readIORef st
     let inp' = InputState pos m
     a' <- mouse Nothing inp' a
     writeIORef st (inp', a')
@@ -216,7 +214,7 @@ handleButton st = do
         OtherButton ix -> ix
 
   when (click == SingleClick || click == ReleaseClick) . lift $ do
-    (InputState p m, a) <- readIORef st
+    (InputState _ m, a) <- readIORef st
     let m' = M.insert ("Mouse" ++ show buttonIx) 
                       (pres, fromIntegral time, mods) m
         inp' = InputState pos m'

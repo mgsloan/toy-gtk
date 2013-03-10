@@ -88,7 +88,7 @@ escapeKeyHandler
 --   into an application.
 runToy :: GtkInteractive a => a -> IO ()
 runToy toy = do
-  initGUI
+  _ <- initGUI
 
   window <- windowNew
   windowSetDefaultSize window 640 480
@@ -100,7 +100,7 @@ runToy toy = do
 
 --TODO: tell the toy that we're going down
 --TODO: or better would catch onDelete events and ask toy what to do
-  onDestroy window quitToy
+  _ <- onDestroy window quitToy
 
   mainGUI
 
@@ -136,18 +136,18 @@ newToy toy = do
           writeIORef requested True
         return True
 
-  windowEv keyPressEvent      (handleKey True)
-  windowEv keyReleaseEvent    (handleKey False)
-  windowEv motionNotifyEvent  handleMotion
-  windowEv buttonPressEvent   handleButton
-  windowEv buttonReleaseEvent handleButton
+  _ <- windowEv keyPressEvent      (handleKey True)
+  _ <- windowEv keyReleaseEvent    (handleKey False)
+  _ <- windowEv motionNotifyEvent  handleMotion
+  _ <- windowEv buttonPressEvent   handleButton
+  _ <- windowEv buttonReleaseEvent handleButton
 
   widgetAddEvents window [PointerMotionMask, PointerMotionHintMask, ButtonMotionMask]
 
   widgetSetCanFocus window True
   widgetGrabFocus window
 
-  onExposeRect canvas $ \_ -> do
+  _ <- onExposeRect canvas $ \_ -> do
     dw <- widgetGetDrawWindow canvas
     (inp, x) <- readIORef state
     x' <- display dw inp x
@@ -167,7 +167,7 @@ newToy toy = do
 --TODO: do we want timer to run only when window is visible?
 --TODO: definitely want timer to stop when widgets are permanently gone
   timer <- timeoutAddFull tickHandler priorityHighIdle 60
-  onUnrealize window $ timeoutRemove timer
+  _ <- onUnrealize window $ timeoutRemove timer
 
   return $ Toy window canvas state
 

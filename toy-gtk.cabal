@@ -4,10 +4,10 @@ Cabal-Version:       >= 1.6
 Synopsis:            Convenient Gtk canvas with mouse and keyboard input.
 Category:            Graphics, GUI
 Description:
-   Implements the toy-interface for gtk.  This provides a simplifying interface
-   for creating applications which draw things and interact with the mouse and
-   keyboard.  It handles the minutiae of setting up the Gtk window and canvas,
-   and processes the input events into more palatable data structures.
+  Implements the toy-interface for gtk.  This provides a simplifying interface
+  for creating applications which draw things and interact with the mouse and
+  keyboard.  It handles the minutiae of setting up the Gtk window and canvas,
+  and processes the input events into more palatable data structures.
 License:             BSD3
 License-file:        LICENSE
 Author:              Michael Sloan
@@ -15,8 +15,8 @@ Maintainer:          Michael Sloan <mgsloan at gmail>
 Stability:           experimental
 Build-Type:          Simple
 Source-repository head
-  type:              git 
-  location:          git://github.com/mgsloan/toy-gtk.git
+  type:              git
+  location:          https://github.com/mgsloan/toy-gtk
 
 Library
   Build-Depends:     base >= 4.2 && < 4.7,

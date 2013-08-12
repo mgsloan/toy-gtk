@@ -7,7 +7,7 @@
   , StandaloneDeriving
   , TypeFamilies
   #-}
------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- |
 -- Module      :  Graphics.UI.Toy.Gtk
 -- Copyright   :  (c) 2011 Michael Sloan
@@ -16,13 +16,18 @@
 -- Stability   :  experimental
 -- Portability :  GHC only
 --
--- The Gtk Toy Framework is a wrapper over Gtk for conveniently creating 
--- applications which draw things and use the mouse or keyboard.
+-- Implements the toy-interface for gtk.  This provides a simple interface for
+-- creating applications which draw things and interact with the mouse and
+-- keyboard.  It handles the minutiae of setting up the gtk window and canvas,
+-- and processes the input events.
 --
--- It handles the minutiae of setting up the Gtk window and canvas, and
--- processes mouse and keyboard inputs into more palatable data structures.
+-- The name \"toy\" comes from the \"toy framework\", a part of the lib2geom
+-- library (<http://lib2geom.sourceforge.net/>).  It's used in building \"toys\"
+-- demonstrating the features of the library.  This is a different variety of
+-- \"TDD\"- but instead of tests, it's toys! We found that building little demos
+--  to be a nice way to drive initial design / development.
 --
------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 module Graphics.UI.Toy.Gtk
   ( module Graphics.UI.Toy
 
@@ -47,6 +52,7 @@ import Graphics.UI.Gtk
 
 import Graphics.UI.Toy
 
+-- | A constructor-less type used to indicate usage of the 'Gtk' backend.
 data Gtk
 
 type instance MousePos Gtk = (Double, Double)
@@ -55,10 +61,17 @@ type instance KeyModifier Gtk = Modifier
 deriving instance Eq   (InputState Gtk)
 deriving instance Show (InputState Gtk)
 
+-- | This is a constraint synonym for the typeclasses that need to be
+--   instantiated in order for 'runToy' to be able to run your toy in a Gtk
+--   window.
 type GtkInteractive a = (Interactive Gtk a, GtkDisplay a)
 
+-- | The typeclass that applications should implement in order to update the
+--   canvas.
 class GtkDisplay a where
-  -- | @display@ is called when the rendering needs to be refreshed.
+  -- | @display@ is called when the rendering needs to be refreshed.  It's
+  --   called with the 'DrawWindow' that should be drawn to, and the current
+  --   input state / application state.
   display  :: DrawWindow -> InputState Gtk -> a -> IO a
   display _ _ = return
 
@@ -73,16 +86,16 @@ simpleDisplay :: (DrawWindow -> a -> a)
               -> DrawWindow -> InputState Gtk -> a -> IO a
 simpleDisplay f dw _ = return . f dw
 
--- | Like it says on the can.  This is a synonym for 'Graphics.UI.Gtk.mainQuit'.
+-- | Like it says on the can. This is a synonym for 'Graphics.UI.Gtk.mainQuit'.
 quitToy :: IO ()
 quitToy = mainQuit
 
 -- | Calls 'quitToy' when the escape key is pressed.
 escapeKeyHandler :: KeyHandler Gtk a
-escapeKeyHandler
-  = keyHandler
-  $ \ke x -> when (ke == (True, Left "Escape")) quitToy 
-          >> return x
+escapeKeyHandler =
+  keyHandler $ \k x -> do
+    when (k == (True, Left "Escape")) quitToy
+    return x
 
 -- | Main program entry-point. This is how you turn an instance of 'Interactive'
 --   into an application.
@@ -114,8 +127,8 @@ data Toy a = Toy
     -- ^ This contains our world, exposed so that your other worlds can interfer
   }
 
--- | Subroutine entrypoint. This is how you turn an instance of Interactive
---   into a widget-like thin
+-- | Subroutine entrypoint. This is how you turn an instance of 'GtkInteractive'
+--   into a widget-like thing.
 newToy :: forall a. GtkInteractive a => a -> IO (Toy a)
 newToy toy = do
   window <- eventBoxNew
@@ -123,7 +136,7 @@ newToy toy = do
   state <- newIORef (InputState (0, 0) M.empty, toy)
   requested <- newIORef True
 
-  let windowEv :: Signal EventBox (EventM e Bool) 
+  let windowEv :: Signal EventBox (EventM e Bool)
                -> (IORef (InputState Gtk, a) -> EventM e ())
                -> IO (ConnectId EventBox)
       windowEv e f = on window e $ f state >> lift redraw
@@ -171,7 +184,7 @@ newToy toy = do
 
   return $ Toy window canvas state
 
-handleKey :: Interactive Gtk a 
+handleKey :: Interactive Gtk a
           => Bool -> IORef (InputState Gtk, a) -> EventM EKey ()
 handleKey press st = do
   ev   <- eventKeyVal
@@ -215,7 +228,7 @@ handleButton st = do
 
   when (click == SingleClick || click == ReleaseClick) . lift $ do
     (InputState _ m, a) <- readIORef st
-    let m' = M.insert ("Mouse" ++ show buttonIx) 
+    let m' = M.insert ("Mouse" ++ show buttonIx)
                       (pres, fromIntegral time, mods) m
         inp' = InputState pos m'
     a' <- mouse (Just (pres, buttonIx)) inp' a

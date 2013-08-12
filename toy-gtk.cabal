@@ -1,13 +1,19 @@
 Name:                toy-gtk
 Version:             0.3.0
 Cabal-Version:       >= 1.6
-Synopsis:            Convenient Gtk canvas with mouse and keyboard input.
-Category:            Graphics, GUI
+Synopsis:            Convenient gtk canvas with mouse and keyboard input
+Category:            Graphics
 Description:
-  Implements the toy-interface for gtk.  This provides a simplifying interface
-  for creating applications which draw things and interact with the mouse and
-  keyboard.  It handles the minutiae of setting up the Gtk window and canvas,
-  and processes the input events into more palatable data structures.
+  Implements the toy-interface for gtk.  This provides a simple interface for
+  creating applications which draw things and interact with the mouse and
+  keyboard.  It handles the minutiae of setting up the gtk window and canvas,
+  and processes the input events.
+  .
+  The name \"toy\" comes from the \"toy framework\", a part of the lib2geom
+  library (<http://lib2geom.sourceforge.net/>).  It's used in building \"toys\"
+  demonstrating the features of the library.  This is a different variety of
+  \"TDD\"- but instead of tests, it's toys! We found that building little demos
+  to be a nice way to drive initial design / development.
 License:             BSD3
 License-file:        LICENSE
 Author:              Michael Sloan
